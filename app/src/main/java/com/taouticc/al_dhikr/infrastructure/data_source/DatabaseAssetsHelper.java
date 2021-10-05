@@ -1,11 +1,9 @@
-package com.taouticc.al_dhikr.infrastructure;
-
+package com.taouticc.al_dhikr.infrastructure.data_source;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -26,8 +24,8 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseAssetsHelper";
 
     private final String dbName;
-    private String DB_PATH = "";
-    private File foreignDatabaseFile = null;
+    private final String DB_PATH;
+    private final File foreignDatabaseFile;
     private static final int DB_VERSION = 1;
 
     private SQLiteDatabase mDatabase;
@@ -42,30 +40,20 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
      * {@link #getReadableDatabase} is called.</p>
      * @param context to use, open and create the database
      * @param dbName name of the database file
+     * @param foreignDatabaseFile file path of foreign Database
      */
-    public DatabaseAssetsHelper(Context context,String dbName,File foreignDatabaseFile){
+    public DatabaseAssetsHelper(Context context,String dbName,File foreignDatabaseFile) {
         super(context, dbName, null, DB_VERSION);
 
         if (dbName == null) throw new IllegalArgumentException("Database name cannot be null");
 
+        //init var
         this.dbName = dbName;
         DB_PATH = context.getApplicationInfo().dataDir + "/databases/";
         this.mContext = context;
         this.foreignDatabaseFile = foreignDatabaseFile;
-
     }
 
-//    public void updateDataBase() throws IOException {
-//        if (mNeedUpdate) {
-//            File dbFile = new File(DB_PATH + dbName);
-//            if (dbFile.exists())
-//                dbFile.delete();
-//
-//            copyDataBase();
-//
-//            mNeedUpdate = false;
-//        }
-//    }
 
     @Override
     public void onCreate(SQLiteDatabase db) {}
@@ -80,7 +68,7 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
      * if you need to write new data call {@link #getWritableDatabase} instead
      * @throws SQLiteException if the database cannot be opened
      * @return a read only database object valid until {@link #getWritableDatabase}
-     *     or {@link #close} is called.
+     *     or {@link #close} get called.
      */
     @Override
     public synchronized SQLiteDatabase getReadableDatabase(){
@@ -92,24 +80,34 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
             throw new IllegalStateException("getReadableDatabase called recursively");
         }
 
-        SQLiteDatabase db = null;
-        try {
-            mIsInitializing = true;
 
+        boolean success = false;
+        SQLiteDatabase db = null;
+
+        try {
+
+            mIsInitializing = true;
             db = createOrOpenDatabase(true);
-            if (db.getVersion() != DB_VERSION) {
-                throw new SQLiteException("Can't upgrade read-only database from version " +
-                        db.getVersion() + " to " + DB_VERSION + ": " + DB_PATH);
+            Log.w(TAG, "Opened " + dbName + " in read-only mode");
+            onOpen(db);
+            success = true;
+        } finally {
+
+            mIsInitializing = false;
+//            if (db != null && db != mDatabase) db.close();
+
+
+            if (success){
+                if (mDatabase != null) {
+                    try { mDatabase.close(); } catch (Exception ignored) { }
+                }
+                mDatabase = db;
+            }else {
+                if (db != null) db.close();
             }
 
-            onOpen(db);
-            Log.w(TAG, "Opened " + dbName + " in read-only mode");
-            mDatabase = db;
-            return mDatabase;
-        } finally {
-            mIsInitializing = false;
-            if (db != null && db != mDatabase) db.close();
         }
+        return db;
     }
 
 
@@ -123,8 +121,11 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
      * to fail, but future attempts may succeed if the problem is fixed.</p>
      *
      * @throws SQLiteException if the database cannot be opened for writing
-     * @return a read/write database object valid until {@link #close} is called
+     * @return a read/write database object valid until{@link #getWritableDatabase}
+     * or {@link #close} get called
+     *
      */
+
     @Override
     public synchronized SQLiteDatabase getWritableDatabase(){
         if (mDatabase != null && mDatabase.isOpen() && !mDatabase.isReadOnly()) {
@@ -134,7 +135,6 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
         if (mIsInitializing) {
             throw new IllegalStateException("getWritableDatabase called recursively");
         }
-
 
         boolean success = false;
         SQLiteDatabase db = null;
@@ -160,7 +160,7 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
 
 
     /**
-     * Close database object.
+     * Close current database object.
      */
     @Override
     public synchronized void close() {
@@ -168,6 +168,22 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
         if (mDatabase != null && mDatabase.isOpen()) {
             mDatabase.close();
             mDatabase = null;
+        }
+    }
+
+
+    /** update the database
+     * remove current db and get a new copy from assets folder
+     */
+    public void updateDataBase() {
+        if (mNeedUpdate) {
+            File dbFile = new File(DB_PATH + dbName);
+            if (dbFile.exists())
+                dbFile.delete();
+
+            copyDataBase();
+
+            mNeedUpdate = false;
         }
     }
 
@@ -198,47 +214,38 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
 
     private SQLiteDatabase createOrOpenDatabase(boolean isReadOnly) throws SQLiteException {
 
-        // test for the existence of the db file first and don't attempt open
-        // to prevent the error trace in log on API 14+
         SQLiteDatabase db = null;
 
-        if (checkDataBase()) {
-            if (isReadOnly) db = returnReadOnlyDatabase();
-            else  db = returnWritableDatabase();
-        }
-        if (db != null) {
+        if (!checkDataBaseExist()) {
             copyDataBase();
-            if (isReadOnly) db = returnReadOnlyDatabase();
-            else db = returnWritableDatabase();
         }
+
+        if (isReadOnly) db = returnReadOnlyDatabase();
+        else  db = returnWritableDatabase();
 
         return db;
     }
 
-    private boolean checkDataBase() {
+    private boolean checkDataBaseExist() {
         File dbFile = new File(DB_PATH + dbName);
         return dbFile.exists();
     }
 
     private void copyDataBase(){
-
-        this.getReadableDatabase();
-        this.close();
         try {
             copyDBFile();
+        } catch (FileNotFoundException e){
+            if (foreignDatabaseFile != null)
+            throw new Error(
+                    "database file not found in : " + foreignDatabaseFile.getAbsolutePath());
         } catch (IOException mIOException) {
             throw new Error("ErrorCopyingDataBase : " + DB_PATH + dbName);
         }
     }
 
     private void copyDBFile() throws IOException {
-        InputStream mInput;
+        InputStream mInput ;
         if (foreignDatabaseFile != null){
-
-            if (!foreignDatabaseFile.exists()) throw new FileNotFoundException(
-                    "database file not found in : " + foreignDatabaseFile.getAbsolutePath()
-            );
-
             mInput = new FileInputStream(foreignDatabaseFile);
         }else {
             mInput = mContext.getAssets().open(dbName);
@@ -251,16 +258,22 @@ public class DatabaseAssetsHelper extends SQLiteOpenHelper {
         byte[] mBuffer = new byte[1024];
         int mLength;
         if (mInput != null) {
-            while ((mLength = mInput.read(mBuffer)) > 0)
+
+            while ((mLength = mInput.read(mBuffer)) > 0){
                 mOutput.write(mBuffer, 0, mLength);
+            }
+
             mOutput.flush();
             mOutput.close();
             mInput.close();
         }else{
-            throw new NullPointerException();
+            throw new NullPointerException("input file must be not null");
         }
     }
 
 
 
 }
+
+
+

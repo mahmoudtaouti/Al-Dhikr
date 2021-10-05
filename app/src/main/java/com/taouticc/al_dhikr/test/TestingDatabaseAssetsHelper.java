@@ -7,11 +7,10 @@ import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Environment;
 
-import com.taouticc.al_dhikr.infrastructure.DatabaseAssetsHelper;
+import com.taouticc.al_dhikr.infrastructure.data_source.DatabaseAssetsHelper;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 
 public class TestingDatabaseAssetsHelper{
     DatabaseAssetsHelper mDBHelper;
@@ -44,22 +43,24 @@ public class TestingDatabaseAssetsHelper{
     }
 
     public void goTestFromStorageDB(){
+        System.out.println("test\n ************************************************************************************************");
         File downloadFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         String path = downloadFolder.getAbsolutePath();
-        File db = new File(path+"/"+"tesdfdft.db");
-        System.out.println("test\n ***********************************");
-        System.out.println(db.exists());
-        mDBHelper = new DatabaseAssetsHelper(context, "tesdfdft.db", db);
+        File dbFile = new File(path+"/"+ "test.db");
+        System.out.println(dbFile.getAbsolutePath()+"\n \r isExist : " +dbFile.exists());
+        mDBHelper = new DatabaseAssetsHelper(context, "test.db",dbFile);
         mDb = mDBHelper.getWritableDatabase();
+
         String test;
 
-//        try {
-//            Cursor cursor = mDb.rawQuery("select * from tab", null);
-//            cursor.moveToFirst();
-//            String content = cursor.getString(0);
-//            test = cursor.getColumnName(0);
-//            int counter = cursor.getColumnCount();
-//            System.out.println("T test tab column :" + test + " with " + counter + " records fist record is -> " + content);
-//        } catch (SQLException ignored){}
+        try {
+            Cursor cursor = mDb.rawQuery("select * from tab", null);
+            int count = cursor.getColumnCount();
+            cursor.moveToFirst();
+            String content = cursor.getString(0);
+            test = cursor.getColumnName(0);
+            System.out.println("T test tab column : " + test + " with " + count + " records\n \r the fist record is -> " + content);
+            mDb.close();
+        } catch (SQLException ignored){}
     }
 }

@@ -1,14 +1,16 @@
-package com.taouticc.al_dhikr.infrastructure;
+package com.taouticc.al_dhikr.infrastructure.data_source;
 
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
-
 import java.io.File;
-import java.io.FileNotFoundException;
+
 
 public class HolyQuranDatabaseHelper extends DatabaseAssetsHelper{
 
-    public static final String Quran_DB_Name = "holy_quran.db";
+    //TODO name currently is set to quran_test.db
+    //   change it to holy_quran.db
+
+    public static final String Quran_DB_Name = "quran_test.db";
     /**
      * constructor
      * <p>The database is not actually
@@ -16,9 +18,10 @@ public class HolyQuranDatabaseHelper extends DatabaseAssetsHelper{
      * {@link #getReadableDatabase} is called.</p>
      *
      * @param context to use, open and create the database
+     * @param foreignDatabaseFile file path of foreign Database
      */
-    public HolyQuranDatabaseHelper(Context context, File foreignDatabaseFile) throws FileNotFoundException {
-        super(context, Quran_DB_Name,null);
+    public HolyQuranDatabaseHelper(Context context, File foreignDatabaseFile){
+        super(context, Quran_DB_Name,foreignDatabaseFile);
     }
 
 
